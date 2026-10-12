@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Budget Adam & Adel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      background: #f5f7fb;
+      color: #222;
+    }
+    header {
+      background: #1f4fd6;
+      color: #fff;
+      padding: 12px 16px;
+      text-align: center;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 1.4rem;
+    }
+    header p {
+      margin: 4px 0 0;
+      font-size: 0.9rem;
+      opacity: 0.9;
+    }
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid #d0d4e6;
+      background: #fff;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 10px;
+      text-align: center;
+      cursor: pointer;
+      border: none;
+      background: #fff;
+      font-size: 1rem;
+    }
+    .tab-btn.active {
+      border-bottom: 3px solid #1f4fd6;
+      font-weight: 600;
+      color: #1f4fd6;
+    }
+    .container {
+      padding: 10px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    @media (max-width: 800px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+    .card h2 {
+      margin-top: 0;
+      font-size: 1.1rem;
+    }
+    label {
+      display: block;
+      font-size: 0.9rem;
+      margin-top: 6px;
+    }
+    input, select {
+      width: 100%;
+      padding: 6px 8px;
+      margin-top: 3px;
+      border-radius: 6px;
+      border: 1px solid #ccd1e4;
+      font-size: 0.9rem;
+      box-sizing: border-box;
+    }
+    button {
+      margin-top: 8px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: none;
+      background: #1f4fd6;
+      color: #fff;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    button.secondary {
+      background: #f0f2ff;
+      color: #1f4fd6;
+      border: 1px solid #d0d4e6;
+    }
+    .balance {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      margin-top: 6px;
+    }
+    th, td {
+      border-bottom: 1px solid #e2e5f2;
+      padding: 4px 2px;
+      text-align: left;
+    }
+    th {
+      font-weight: 600;
+      background: #f5f7fb;
+    }
+    .stats-list {
+      font-size: 0.9rem;
+      margin-top: 4px;
+    }
+    .goal-text {
+      font-size: 0.9rem;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Budget Adam & Adel</h1>
+  <p>Apprendre à gérer et optimiser leur argent ensemble</p>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" data-child="adam">Adam</button>
+  <button class="tab-btn" data-child="adel">Adel</button>
+</div>
+
+<div class="container">
+  <div id="adam" class="child-view"></div>
+  <div id="adel" class="child-view" style="display:none;"></div>
+</div>
+
+<script>
+  // --------- Modèle de données ---------
+  class ChildBudget {
+    constructor(name) {
+      this.name = name;
+      this.transactions = []; // {type: 'income'|'expense', amount, date, category}
+      this.goalAmount = 0;
+      this.goalDesc = "";
+    }
+
+    addIncome(amount, date) {
+      this.transactions.push({
+        type: "income",
+        amount: amount,
+        date: date,
+        category: "Alimentation du compte"
+      });
+    }
+
+    addExpense(amount, date, category) {
+      this.transactions.push({
+        type: "expense",
+        amount: -amount,
+        date: date,
+        category: category || "Dépense"
+      });
+    }
+
+    setGoal(amount, desc) {
+      this.goalAmount = amount;
+      this.goalDesc = desc || "Objectif";
+    }
+
+    getBalance() {
+      return this.transactions.reduce((sum, t) => sum + t.amount, 0);
+    }
+
+    getSortedTransactions() {
+      return [...this.transactions].sort((a, b) => a.date - b.date);
+    }
+
+    getGoalProgress() {
+      if (this.goalAmount <= 0) return 0;
+      const bal = this.getBalance();
+      return Math.max(0, Math.min(100, (bal / this.goalAmount) * 100));
+    }
+
+    getExpenseStats() {
+      const stats = {};
+      for (const t of this.transactions) {
+        if (t.type === "expense") {
+          const cat = t.category || "Dépense";
+          stats[cat] = (stats[cat] || 0) + (-t.amount);
+        }
+      }
+      return stats;
+    }
+  }
+
+  const adamBudget = new ChildBudget("Adam");
+  const adelBudget = new ChildBudget("Adel");
+
+  // --------- UI ---------
+  function createChildView(containerId, budget) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = "";
+
+    const grid = document.createElement("div");
+    grid.className = "grid";
+
+    // Carte solde + objectif
+    const cardSummary = document.createElement("div");
+    cardSummary.className = "card";
+    cardSummary.innerHTML = `
+      <h2>${budget.name}</h2>
+      <div class="balance" id="${containerId}-balance">Solde : 0.00 €</div>
+      <div class="goal-text" id="${containerId}-goal-text">Objectif : aucun défini</div>
+      <div class="goal-text" id="${containerId}-goal-progress">Progression : 0 %</div>
+      <hr style="margin:8px 0;border:none;border-top:1px solid #e2e5f2;">
+      <label>Montant objectif (€)</label>
+      <input type="number" step="0.01" id="${containerId}-goal-amount" />
+      <label>Description</label>
+      <input type="text" id="${containerId}-goal-desc" placeholder="Ex: vélo, console, voyage..." />
+      <button id="${containerId}-goal-btn">Définir l’objectif</button>
+    `;
+    grid.appendChild(cardSummary);
+
+    // Carte revenus
+    const cardIncome = document.createElement("div");
+    cardIncome.className = "card";
+    cardIncome.innerHTML = `
+      <h2>Alimenter le compte</h2>
+      <label>Montant (€)</label>
+      <input type="number" step="0.01" id="${containerId}-income-amount" />
+      <label>Date</label>
+      <input type="date" id="${containerId}-income-date" />
+      <button id="${containerId}-income-btn">Ajouter revenu</button>
+    `;
+    grid.appendChild(cardIncome);
+
+    // Carte dépenses
+    const cardExpense = document.createElement("div");
+    cardExpense.className = "card";
+    cardExpense.innerHTML = `
+      <h2>Ajouter une dépense</h2>
+      <label>Montant (€)</label>
+      <input type="number" step="0.01" id="${containerId}-expense-amount" />
+      <label>Date</label>
+      <input type="date" id="${containerId}-expense-date" />
+      <label>Type de dépense</label>
+      <input type="text" id="${containerId}-expense-cat" placeholder="Snack, jouet, livre..." />
+      <button id="${containerId}-expense-btn">Ajouter dépense</button>
+    `;
+    grid.appendChild(cardExpense);
+
+    // Carte graphique
+    const cardChart = document.createElement("div");
+    cardChart.className = "card";
+    cardChart.innerHTML = `
+      <h2>Évolution du solde</h2>
+      <canvas id="${containerId}-chart" height="180"></canvas>
+    `;
+    grid.appendChild(cardChart);
+
+    // Carte mouvements
+    const cardMovements = document.createElement("div");
+    cardMovements.className = "card";
+    cardMovements.innerHTML = `
+      <h2>Mouvements</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Montant (€)</th>
+            <th>Date</th>
+            <th>Catégorie</th>
+          </tr>
+        </thead>
+        <tbody id="${containerId}-movements-body"></tbody>
+      </table>
+    `;
+    grid.appendChild(cardMovements);
+
+    // Carte stats
+    const cardStats = document.createElement("div");
+    cardStats.className = "card";
+    cardStats.innerHTML = `
+      <h2>Statistiques des dépenses</h2>
+      <div class="stats-list" id="${containerId}-stats"></div>
+    `;
+    grid.appendChild(cardStats);
+
+    container.appendChild(grid);
+
+    // Chart.js
+    const ctx = document.getElementById(`${containerId}-chart`).getContext("2d");
+    const chart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [{
+          label: "Solde (€)",
+          data: [],
+          borderColor: "#1f4fd6",
+          backgroundColor: "rgba(31,79,214,0.1)",
+          tension: 0.2,
+          pointRadius: 3
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          x: { title: { display: true, text: "Date" } },
+          y: { title: { display: true, text: "Solde (€)" } }
+        }
+      }
+    });
+
+    // --------- Actions ---------
+    document.getElementById(`${containerId}-goal-btn`).onclick = () => {
+      const amount = parseFloat(document.getElementById(`${containerId}-goal-amount`).value || "0");
+      const desc = document.getElementById(`${containerId}-goal-desc`).value.trim();
+      if (!amount || amount <= 0) {
+        alert("Montant d’objectif invalide.");
+        return;
+      }
+      budget.setGoal(amount, desc);
+      updateSummary();
+    };
+
+    document.getElementById(`${containerId}-income-btn`).onclick = () => {
+      const amount = parseFloat(document.getElementById(`${containerId}-income-amount`).value || "0");
+      const dateStr = document.getElementById(`${containerId}-income-date`).value;
+      if (!amount || amount <= 0) {
+        alert("Montant de revenu invalide.");
+        return;
+      }
+      if (!dateStr) {
+        alert("Choisis une date.");
+        return;
+      }
+      budget.addIncome(amount, new Date(dateStr));
+      document.getElementById(`${containerId}-income-amount`).value = "";
+      updateAll();
+    };
+
+    document.getElementById(`${containerId}-expense-btn`).onclick = () => {
+      const amount = parseFloat(document.getElementById(`${containerId}-expense-amount`).value || "0");
+      const dateStr = document.getElementById(`${containerId}-expense-date`).value;
+      const cat = document.getElementById(`${containerId}-expense-cat`).value.trim();
+      if (!amount || amount <= 0) {
+        alert("Montant de dépense invalide.");
+        return;
+      }
+      if (!dateStr) {
+        alert("Choisis une date.");
+        return;
+      }
+      budget.addExpense(amount, new Date(dateStr), cat);
+      document.getElementById(`${containerId}-expense-amount`).value = "";
+      updateAll();
+    };
+
+    function updateSummary() {
+      document.getElementById(`${containerId}-balance`).textContent =
+        `Solde : ${budget.getBalance().toFixed(2)} €`;
+      if (budget.goalAmount > 0) {
+        document.getElementById(`${containerId}-goal-text`).textContent =
+          `Objectif : ${budget.goalAmount.toFixed(2)} € pour « ${budget.goalDesc} »`;
+        document.getElementById(`${containerId}-goal-progress`).textContent =
+          `Progression : ${budget.getGoalProgress().toFixed(1)} %`;
+      } else {
+        document.getElementById(`${containerId}-goal-text`).textContent =
+          "Objectif : aucun défini";
+        document.getElementById(`${containerId}-goal-progress`).textContent =
+          "Progression : 0 %";
+      }
+    }
+
+    function updateMovements() {
+      const tbody = document.getElementById(`${containerId}-movements-body`);
+      tbody.innerHTML = "";
+      const txs = budget.getSortedTransactions();
+      for (const t of txs) {
+        const tr = document.createElement("tr");
+        const typeLabel = t.type === "income" ? "Revenu" : "Dépense";
+        const amountDisplay = t.type === "income" ? t.amount : -t.amount;
+        const dateStr = t.date.toLocaleDateString("fr-FR");
+        tr.innerHTML = `
+          <td>${typeLabel}</td>
+          <td>${amountDisplay.toFixed(2)}</td>
+          <td>${dateStr}</td>
+          <td>${t.category}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
+
+    function updateChart() {
+      const txs = budget.getSortedTransactions();
+      const labels = [];
+      const data = [];
+      let current = 0;
+      for (const t of txs) {
+        current += t.amount;
+        labels.push(t.date.toLocaleDateString("fr-FR"));
+        data.push(current.toFixed(2));
+      }
+      chart.data.labels = labels;
+      chart.data.datasets[0].data = data;
+      chart.update();
+    }
+
+    function updateStats() {
+      const statsDiv = document.getElementById(`${containerId}-stats`);
+      const stats = budget.getExpenseStats();
+      const cats = Object.keys(stats);
+      if (cats.length === 0) {
+        statsDiv.textContent = "Aucune dépense enregistrée pour l’instant.";
+        return;
+      }
+      let html = "Total des dépenses par catégorie :<br>";
+      const sorted = cats.sort((a, b) => stats[b] - stats[a]);
+      for (const cat of sorted) {
+        html += `• ${cat} : ${stats[cat].toFixed(2)} €<br>`;
+      }
+      html += "<br>Top des catégories les plus dépensières :<br>";
+      sorted.slice(0, 3).forEach((cat, i) => {
+        html += `${i + 1}. ${cat} (${stats[cat].toFixed(2)} €)<br>`;
+      });
+      statsDiv.innerHTML = html;
+    }
+
+    function updateAll() {
+      updateSummary();
+      updateMovements();
+      updateChart();
+      updateStats();
+    }
+
+    updateAll();
+  }
+
+  // Initialisation des vues
+  createChildView("adam", adamBudget);
+  createChildView("adel", adelBudget);
+
+  // Tabs
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      const child = btn.dataset.child;
+      document.querySelectorAll(".child-view").forEach(view => {
+        view.style.display = "none";
+      });
+      document.getElementById(child).style.display = "block";
+    });
+  });
+</script>
+</body>
+</html>
