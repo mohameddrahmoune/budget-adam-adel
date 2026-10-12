@@ -154,6 +154,28 @@
       this.transactions = []; // {type: 'income'|'expense', amount, date, category}
       this.goalAmount = 0;
       this.goalDesc = "";
+
+      try {
+        const saved = JSON.parse(localStorage.getItem(`budget-${name.toLowerCase()}`) || "null");
+        if (saved) {
+          this.transactions = saved.transactions.map(transaction => ({
+            ...transaction,
+            date: new Date(transaction.date)
+          }));
+          this.goalAmount = saved.goalAmount || 0;
+          this.goalDesc = saved.goalDesc || "";
+        }
+      } catch {
+        localStorage.removeItem(`budget-${name.toLowerCase()}`);
+      }
+    }
+
+    save() {
+      localStorage.setItem(`budget-${this.name.toLowerCase()}`, JSON.stringify({
+        transactions: this.transactions,
+        goalAmount: this.goalAmount,
+        goalDesc: this.goalDesc
+      }));
     }
 
     addIncome(amount, date) {
@@ -163,6 +185,7 @@
         date: date,
         category: "Alimentation du compte"
       });
+      this.save();
     }
 
     addExpense(amount, date, category) {
@@ -172,11 +195,13 @@
         date: date,
         category: category || "Dépense"
       });
+      this.save();
     }
 
     setGoal(amount, desc) {
       this.goalAmount = amount;
       this.goalDesc = desc || "Objectif";
+      this.save();
     }
 
     getBalance() {
